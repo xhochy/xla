@@ -16,6 +16,7 @@ limitations under the License.
 #ifndef XLA_SERVICE_HLO_COST_ANALYSIS_H_
 #define XLA_SERVICE_HLO_COST_ANALYSIS_H_
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -571,6 +572,20 @@ class HloCostAnalysis : public ConstDfsHloVisitor {
                              const DotDimensionNumbers& dnums);
 
  protected:
+  virtual Status FusionProcessOutputBytesAccessed(const HloInstruction* fusion);
+  virtual Status FusionProcessOperandBytesRead(const HloInstruction* fusion);
+  virtual Status FusionCountConstantsMemoryAccess(const HloInstruction* fusion);
+
+  virtual bool ShouldFilterFusionInput(const HloInstruction* fusion,
+                                       int64_t input_index) {
+    return false;
+  }
+
+  virtual bool ShouldFilterFusionInstruction(
+      const HloInstruction* fusion, const HloInstruction* instruction) {
+    return false;
+  }
+
   typedef absl::flat_hash_map<const HloInstruction*, Properties>
       HloToProperties;
 
@@ -584,28 +599,31 @@ class HloCostAnalysis : public ConstDfsHloVisitor {
   // Creates a nested instance of HloCostAnalysis using the same Options.
   virtual std::unique_ptr<HloCostAnalysis> CreateNestedCostAnalysis();
 
-  // Returns the properties computed from visiting the computation rooted at the
-  // given hlo. The cost of visited sub HLO instructions is saved to
+  // Returns the properties computed from visiting the computation rooted at
+  // the given hlo. The cost of visited sub HLO instructions is saved to
   // hlo_properties_, which will be used by functions such as
-  // flop_count(hlo_instruction) to return cost of a particular HLO instruction.
-  StatusOr<Properties> ProcessSubcomputation(HloComputation* computation);
+  // flop_count(hlo_instruction) to return cost of a particular HLO
+  // instruction.
+  virtual StatusOr<Properties> ProcessSubcomputation(
+      HloComputation* computation);
 
   // Utility function to handle all element-wise operations.
   Status HandleElementwiseOp(const HloInstruction* hlo_instruction);
 
   // Returns 0.0f if the hlo is not present in hlo_to_properties or if the key
-  // is not present in hlo_to_properties[hlo]. Otherwise, returns the value that
-  // the key maps to in the properties of the given hlo.
+  // is not present in hlo_to_properties[hlo]. Otherwise, returns the value
+  // that the key maps to in the properties of the given hlo.
   static float GetPropertyForHlo(const HloInstruction& hlo,
                                  absl::string_view key,
                                  const HloToProperties& hlo_to_properties);
 
-  // Traverses a fusion operand to find the actual bytes accessed by the fusion
-  // node.
+  // Traverses a fusion operand to find the actual bytes accessed by the
+  // fusion node.
   virtual int64_t FusionParameterReadBytes(const HloInstruction* hlo) const;
 
-  // Traverses a fusion counting total utilization of every instruction inside.
-  // Currently implemented non-trivially only in the GPU cost analysis.
+  // Traverses a fusion counting total utilization of every instruction
+  // inside. Currently implemented non-trivially only in the GPU cost
+  // analysis.
   virtual Status FusionCalculateUtilizations(const HloInstruction* fusion);
 
   HloToProperties hlo_properties_;
@@ -615,8 +633,8 @@ class HloCostAnalysis : public ConstDfsHloVisitor {
   // bottleneck.
   bool current_should_compute_bottleneck_time_;
 
-  // The properties of the currently visited instruction. A HandleFoo method can
-  // modify these to change the default values computed in Preprocess.
+  // The properties of the currently visited instruction. A HandleFoo method
+  // can modify these to change the default values computed in Preprocess.
   Properties current_properties_;
 
   // The sum of the properties of all HLOs in the computation.
