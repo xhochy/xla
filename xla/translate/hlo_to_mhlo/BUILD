@@ -93,6 +93,7 @@ cc_library(
     deps = [
         "//xla:literal",
         "//xla:shape_util",
+        "//xla:types",
         "//xla:util",
         "//xla:xla_data_proto_cc",
         "//xla/hlo/ir:hlo",

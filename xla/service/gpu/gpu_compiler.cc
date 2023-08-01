@@ -74,6 +74,7 @@ limitations under the License.
 #include "xla/service/convolution_4d_expander.h"
 #include "xla/service/convolution_pred_expander.h"
 #include "xla/service/copy_insertion.h"
+#include "xla/service/cpu_gpu_shape_verifier.h"
 #include "xla/service/dot_decomposer.h"
 #include "xla/service/dot_merger.h"
 #include "xla/service/dump.h"
@@ -111,7 +112,6 @@ limitations under the License.
 #include "xla/service/gpu/gpu_reduce_scatter_creator.h"
 #include "xla/service/gpu/gpu_sanitize_constant_names.h"
 #include "xla/service/gpu/gpu_scatter_expander.h"
-#include "xla/service/gpu/gpu_shape_verifier.h"
 #include "xla/service/gpu/gpu_types.h"
 #include "xla/service/gpu/hlo_fusion_stats.h"
 #include "xla/service/gpu/horizontal_loop_fusion.h"
@@ -168,6 +168,7 @@ limitations under the License.
 #include "xla/service/spmd/stateful_rng_spmd_partitioner.h"
 #include "xla/service/stable_sort_expander.h"
 #include "xla/service/stochastic_convert_decomposer.h"
+#include "xla/service/sub_byte_normalization.h"
 #include "xla/service/topk_rewriter.h"
 #include "xla/service/transpose_folding.h"
 #include "xla/service/tuple_simplifier.h"
@@ -271,7 +272,7 @@ namespace {
 void AddHloVerifier(HloPassPipeline* pipeline, HloVerifierOpts&& opts = {},
                     bool debug_only = false) {
   std::unique_ptr<TargetVerifierMetadata> verifier_metadata =
-      std::make_unique<GpuVerifierMetadata>(std::move(opts));
+      std::make_unique<CpuGpuVerifierMetadata>(std::move(opts));
   if (debug_only) {
     pipeline->AddInvariantCheckerDebug<HloVerifier>(
         std::move(verifier_metadata), "hlo verifier (debug)");
@@ -464,6 +465,9 @@ Status GpuCompiler::OptimizeHloModule(HloModule* hlo_module,
 
     pipeline.AddPass<OperandUpcaster>(upcaster_filter);
     pipeline.AddPass<ResultCaster>(upcaster_filter);
+
+    pipeline.AddPass<SubByteNormalization>(
+        SubByteNormalization::SET_ELEMENT_SIZE);
 
     // Expand random number generation.
     pipeline.AddPass<RngExpander>();
@@ -722,6 +726,10 @@ Status GpuCompiler::OptimizeHloModule(HloModule* hlo_module,
     pipeline.AddPass<GpuLayoutAssignment>(
         hlo_module->mutable_entry_computation_layout(), stream_exec,
         &layout_constraints);
+    // Run SubByteNormalization as GpuLayoutAssignment may modify a Layout's
+    // element_size_in_bits field.
+    pipeline.AddPass<SubByteNormalization>(
+        SubByteNormalization::SET_ELEMENT_SIZE);
     TF_RETURN_IF_ERROR(pipeline.Run(hlo_module).status());
   }
 

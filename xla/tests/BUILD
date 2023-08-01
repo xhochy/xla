@@ -1364,6 +1364,24 @@ xla_test(
 )
 
 xla_test(
+    name = "int4_test",
+    srcs = ["int4_test.cc"],
+    backends = [
+        "cpu",
+        "gpu",
+        "interpreter",
+    ],
+    deps = [
+        ":client_library_test_base",
+        ":hlo_test_base",
+        ":xla_internal_test_main",
+        "//xla:test",
+        "//xla/client:xla_builder",
+        "@tsl//tsl/platform:errors",
+    ],
+)
+
+xla_test(
     name = "slice_test",
     timeout = "long",
     srcs = ["slice_test.cc"],

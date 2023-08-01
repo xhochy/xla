@@ -66,6 +66,7 @@ class LayoutNormalizationVisitor : public DfsHloRewriteVisitor {
 
     const Shape& shape = hlo->shape();
     Shape normalized_shape = Normalize(shape);
+    normalized_shape.mutable_layout()->set_element_size_in_bits(0);
     *literal.mutable_shape_do_not_use() = normalized_shape;
     HloInstruction* bc_to_orig = MakeBitcastHlo(hlo, shape);
     *hlo->mutable_shape() = normalized_shape;
@@ -257,7 +258,8 @@ class LayoutNormalizationVisitor : public DfsHloRewriteVisitor {
     auto operand_shape = operand->shape();
 
     // Precondition: elementwise unary leaves layout intact.
-    TF_RET_CHECK(s.layout() == operand_shape.layout())
+    TF_RET_CHECK(
+        Layout::Equal().IgnoreElementSize()(s.layout(), operand_shape.layout()))
         << "Unexpected non-layout preserving elementwise unary: "
         << hlo->ToString();
     TF_ASSIGN_OR_RETURN(auto normalized_input, GetNormalizedInput(operand));
@@ -631,8 +633,9 @@ class LayoutNormalizationVisitor : public DfsHloRewriteVisitor {
         << "Unexpected HLO input: " << hlo->ToString();
     auto input = hlo->mutable_operand(0);
     auto input_shape = input->shape();
-    TF_RET_CHECK(input_shape.layout() ==
-                 LayoutUtil::GetDefaultLayoutForShape(input_shape));
+    TF_RET_CHECK(Layout::Equal().IgnoreElementSize()(
+        input_shape.layout(),
+        LayoutUtil::GetDefaultLayoutForShape(input_shape)));
     return input;
   }
 

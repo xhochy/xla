@@ -141,7 +141,6 @@ limitations under the License.
 #include "xla/service/cpu/cpu_instruction_fusion.h"
 #include "xla/service/cpu/cpu_layout_assignment.h"
 #include "xla/service/cpu/cpu_options.h"
-#include "xla/service/cpu/cpu_shape_verifier.h"
 #include "xla/service/cpu/dot_op_emitter.h"
 #include "xla/service/cpu/hlo_xla_runtime_pipeline.h"
 #include "xla/service/cpu/ir_emitter.h"
@@ -155,6 +154,7 @@ limitations under the License.
 #include "xla/service/cpu/simple_orc_jit.h"
 #include "xla/service/cpu/target_machine_features.h"
 #include "xla/service/cpu/xla_framework.h"
+#include "xla/service/cpu_gpu_shape_verifier.h"
 #include "xla/service/dot_decomposer.h"
 #include "xla/service/dump.h"
 #include "xla/service/dynamic_dimension_inference.h"
@@ -206,6 +206,7 @@ limitations under the License.
 #include "xla/service/sort_simplifier.h"
 #include "xla/service/spmd/stateful_rng_spmd_partitioner.h"
 #include "xla/service/stochastic_convert_decomposer.h"
+#include "xla/service/sub_byte_normalization.h"
 #include "xla/service/topk_rewriter.h"
 #include "xla/service/transpose_folding.h"
 #include "xla/service/tree_reduction_rewriter.h"
@@ -603,7 +604,8 @@ void AddHloVerifier(HloPassPipeline* pipeline, bool allow_sparse_shapes,
     verifier_metadata =
         std::make_unique<DefaultVerifierMetadata>(std::move(opts));
   } else {
-    verifier_metadata = std::make_unique<CpuVerifierMetadata>(std::move(opts));
+    verifier_metadata =
+        std::make_unique<CpuGpuVerifierMetadata>(std::move(opts));
   }
   if (debug_only) {
     pipeline->AddInvariantCheckerDebug<HloVerifier>(
@@ -647,6 +649,16 @@ Status CpuCompiler::RunHloPassesThroughLayoutAssn(
     sharding_removal_pipeline.AddPass<ShardingRemover>();
     sharding_removal_pipeline.AddPass<HloDCE>();
     TF_RETURN_IF_ERROR(sharding_removal_pipeline.Run(module).status());
+  }
+
+  {
+    // Int4Packer must be run before the rest of the pipeline since it modifies
+    // the layout of the entry computation inputs/outputs, which is passed to
+    // LayoutAssignment.
+    HloPassPipeline int4_packer_pipeline("Int4Packer pipeline");
+    int4_packer_pipeline.AddPass<SubByteNormalization>(
+        SubByteNormalization::SET_ELEMENT_SIZE);
+    TF_RETURN_IF_ERROR(int4_packer_pipeline.Run(module).status());
   }
 
   HloPassPipeline pipeline("HLO passes through layout assignment");

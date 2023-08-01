@@ -207,7 +207,6 @@ cc_library(
         ":cpu_instruction_fusion",
         ":cpu_layout_assignment",
         ":cpu_options",
-        ":cpu_shape_verifier",
         ":dot_op_emitter",
         ":executable_proto_cc",
         ":hlo_xla_runtime_pipeline",
@@ -268,6 +267,7 @@ cc_library(
         "//xla/service:conditional_to_select",
         "//xla/service:convolution_group_converter",
         "//xla/service:copy_insertion",
+        "//xla/service:cpu_gpu_shape_verifier",
         "//xla/service:dot_decomposer",
         "//xla/service:dump",
         "//xla/service:dynamic_dimension_inference",
@@ -318,6 +318,7 @@ cc_library(
         "//xla/service:slow_operation_alarm",
         "//xla/service:sort_simplifier",
         "//xla/service:stochastic_convert_decomposer",
+        "//xla/service:sub_byte_normalization",
         "//xla/service:topk_rewriter",
         "//xla/service:transpose_folding",
         "//xla/service:tree_reduction_rewriter",
@@ -1356,15 +1357,6 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@tsl//tsl/platform:errors",
         "@tsl//tsl/platform:status",
-    ],
-)
-
-cc_library(
-    name = "cpu_shape_verifier",
-    srcs = ["cpu_shape_verifier.cc"],
-    hdrs = ["cpu_shape_verifier.h"],
-    deps = [
-        "//xla/service:hlo_verifier",
     ],
 )
 

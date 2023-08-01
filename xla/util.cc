@@ -498,4 +498,23 @@ std::pair<float, float> SplitF64ToF32(double x) {
   return std::make_pair(hi, lo);
 }
 
+void PackInt4(const char* input, char* output, size_t num_elements) {
+  for (size_t i = 0; i < num_elements; ++i) {
+    if (i % 2 == 0) {
+      output[i / 2] = (input[i] & 0xF) << 4;
+    } else {
+      output[i / 2] |= input[i] & 0xF;
+    }
+  }
+}
+
+void UnpackInt4(const char* input, char* output, size_t num_elements) {
+  for (size_t i = 0; i < num_elements; ++i) {
+    if (i % 2 == 0) {
+      output[i] = (input[i / 2] >> 4) & 0XF;
+    } else {
+      output[i] = input[i / 2] & 0xF;
+    }
+  }
+}
 }  // namespace xla

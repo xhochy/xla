@@ -262,8 +262,12 @@ StatusOr<HloFusionAnalysis> HloFusionAnalysis::Create(
     const GpuDeviceInfo* device_info) {
   std::vector<const HloInstruction*> heroes;
   heroes.reserve(hlo_roots.size());
+  bool has_4_bit_output = false;
   for (auto* root : hlo_roots) {
     heroes.push_back(&FindNonTrivialHero(*root));
+    if (primitive_util::Is4BitType(root->shape().element_type())) {
+      has_4_bit_output = true;
+    }
   }
 
   std::vector<const HloInstruction*> fusion_arguments;
@@ -271,14 +275,20 @@ StatusOr<HloFusionAnalysis> HloFusionAnalysis::Create(
                       [&](const HloInstruction& argument) {
                         fusion_arguments.push_back(&argument);
                       });
+  bool has_4_bit_input = false;
+  for (auto* input : fusion_arguments) {
+    if (primitive_util::Is4BitType(input->shape().element_type())) {
+      has_4_bit_input = true;
+    }
+  }
 
   std::optional<TransposeDescription> tiled_transpose_hero =
       FindConsistentTransposeHero(hlo_roots, heroes);
 
   return HloFusionAnalysis(std::move(backend_config), std::move(hlo_roots),
                            std::move(boundary_fn), std::move(fusion_arguments),
-                           std::move(heroes), device_info,
-                           tiled_transpose_hero);
+                           std::move(heroes), device_info, tiled_transpose_hero,
+                           has_4_bit_input, has_4_bit_output);
 }
 
 // static
@@ -307,6 +317,13 @@ HloFusionAnalysis::EmitterFusionKind HloFusionAnalysis::GetEmitterFusionKind()
   }
 #endif
   const auto& roots = fusion_roots();
+
+  if (has_4_bit_input_ || has_4_bit_output_) {
+    // Only loop fusions currently can handle int4 inputs/outputs, due to the
+    // special handling with IrArray needed to deal with two values occupying a
+    // single byte.
+    return EmitterFusionKind::kLoop;
+  }
 
   if (absl::c_any_of(roots, [](const HloInstruction* root) {
         return IsRealReductionHero(*root, FindNonTrivialHero(*root));
@@ -459,6 +476,10 @@ const LaunchDimensionsConfig* HloFusionAnalysis::GetLoopFusionConfig() {
   if (num_elements >= n_threads_max &&
       !MayPreventVectorization(fusion_roots_, fusion_boundary_fn_)) {
     unroll_factor = ComputeMaxUnrollFactor(num_elements);
+  }
+  if (has_4_bit_output_ && unroll_factor == 1) {
+    // Ensure a single thread writes to a byte containing two int4 values
+    unroll_factor = 2;
   }
   VLOG(2) << "Unroll factor: " << unroll_factor;
 

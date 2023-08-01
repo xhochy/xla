@@ -3336,6 +3336,7 @@ cc_library(
     deps = [
         ":hlo_creation_utils",
         ":hlo_pass",
+        "//xla:shape_util",
         "//xla/hlo/ir:hlo",
     ],
 )
@@ -4558,6 +4559,16 @@ xla_cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
         "@tsl//tsl/lib/core:status_test_util",
+    ],
+)
+
+cc_library(
+    name = "cpu_gpu_shape_verifier",
+    srcs = ["cpu_gpu_shape_verifier.cc"],
+    hdrs = ["cpu_gpu_shape_verifier.h"],
+    deps = [
+        "//xla:shape_util",
+        "//xla/service:hlo_verifier",
     ],
 )
 
@@ -6682,6 +6693,7 @@ cc_library(
     hdrs = ["sub_byte_normalization.h"],
     deps = [
         ":hlo_pass",
+        "//xla:shape_util",
         "//xla:statusor",
         "//xla/hlo/ir:hlo",
         "@com_google_absl//absl/container:flat_hash_set",

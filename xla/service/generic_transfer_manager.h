@@ -65,6 +65,12 @@ class GenericTransferManager : public TransferManager {
       const Shape& shape, se::DeviceMemoryBase* region) override;
 
  private:
+  // Returns whether subbyte types (types less than 1 byte, e.g. U4) should
+  // have multiple values packed into a single byte on the device. Subbyte
+  // bytes are never packed on the host. By default, returns false, so a byte
+  // can only hold one value, but subclasses can override this.
+  virtual bool PackSubbyteTypes() const { return false; }
+
   // The platform this transfer manager targets.
   const se::Platform::Id platform_id_;
 
