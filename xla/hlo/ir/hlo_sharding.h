@@ -399,6 +399,9 @@ class HloSharding {
   // REQUIRES: !IsTuple()
   Shape TileShape(const Shape& shape) const;
 
+  // Gets the un-tiled shape.
+  Shape UnTileShape(const Shape& shape) const;
+
   // Gets the tile shape on the device.
   // REQUIRES: !IsTuple()
   Shape TileShape(const Shape& shape, int64_t device) const;
@@ -607,6 +610,10 @@ class HloSharding {
   // Internal helper to validate a non-tuple (leaf) sharding.
   Status ValidateNonTuple(const Shape& shape,
                           std::optional<int64_t> num_devices) const;
+
+  // Gets the un-tiled shape.
+  // REQUIRES: !IsTuple()
+  Shape UnTileLeafShape(const Shape& shape) const;
 
   // This field is only used if replicated_ is false. If maximal_ is true, then
   // the field contains a rank 1 array with a single element, which is the

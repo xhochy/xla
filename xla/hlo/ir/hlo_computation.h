@@ -32,6 +32,7 @@ limitations under the License.
 #include "xla/hlo/ir/dfs_hlo_visitor.h"
 #include "xla/hlo/ir/hlo_clone_context.h"
 #include "xla/hlo/ir/hlo_instruction.h"
+#include "xla/hlo/ir/hlo_sharding.h"
 #include "xla/iterator_util.h"
 #include "xla/printer.h"
 #include "xla/service/hlo.pb.h"
@@ -758,6 +759,22 @@ class HloComputation {
   // Returns true iff this computation can be inlined as a single instruction.
   bool CanExpandIntoSingleInstruction() const;
 
+  // Returns true if the computation defines an output HLO sharding.
+  bool has_spmd_output_sharding() const {
+    return spmd_output_sharding_.has_value();
+  }
+
+  // Returns the computation's output sharding.
+  const HloSharding& spmd_output_sharding() const {
+    CHECK(spmd_output_sharding_.has_value());
+    return *spmd_output_sharding_;
+  }
+
+  // Sets the computation's output HLO sharding.
+  void set_spmd_output_sharding(const HloSharding& sharding) {
+    spmd_output_sharding_ = sharding;
+  }
+
  private:
   explicit HloComputation(
       const std::string& name, int parameter_count,
@@ -850,6 +867,10 @@ class HloComputation {
 
   // Module containing this computation.
   HloModule* parent_ = nullptr;
+
+  // The HLO sharding of the computation's output (root) for
+  // SPMD-partitioned computations.
+  std::optional<HloSharding> spmd_output_sharding_;
 
   // Store instructions in std::list as they can be added and removed
   // arbitrarily and we want a stable iteration order. Keep a map from

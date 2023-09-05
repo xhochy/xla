@@ -976,6 +976,35 @@ Shape HloSharding::TileShape(const Shape& shape) const {
   return result_shape;
 }
 
+Shape HloSharding::UnTileShape(const Shape& shape) const {
+  if (!IsTuple()) {
+    return UnTileLeafShape(shape);
+  }
+  Shape result_shape = shape;
+  ShapeUtil::ForEachMutableSubshape(
+      &result_shape, [this, &shape](Shape* subshape, const ShapeIndex& index) {
+        if (!ShapeUtil::IsLeafIndex(shape, index)) {
+          return;
+        }
+        const HloSharding& subshape_sharding = GetSubSharding(shape, index);
+        *subshape = subshape_sharding.UnTileLeafShape(*subshape);
+      });
+
+  return result_shape;
+}
+
+Shape HloSharding::UnTileLeafShape(const Shape& shape) const {
+  if (IsTileMaximal() || IsManual() || IsUnknown()) {
+    return shape;
+  }
+  Shape result_shape = shape;
+  for (int64_t i = 0; i < TiledDataRank(); ++i) {
+    result_shape.set_dimensions(i,
+                                shape.dimensions(i) * tile_assignment_.dim(i));
+  }
+  return result_shape;
+}
+
 Shape HloSharding::TileShape(const Shape& shape, int64_t device) const {
   if (IsTileMaximal() || IsManual() || IsUnknown()) {
     return shape;

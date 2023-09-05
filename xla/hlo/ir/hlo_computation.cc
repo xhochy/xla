@@ -30,6 +30,7 @@ limitations under the License.
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "xla/hlo/ir/hlo_clone_context.h"
@@ -777,6 +778,9 @@ HloComputationProto HloComputation::ToProto() const {
   proto.set_is_fusion_computation(is_fusion_computation_);
   proto.set_execution_thread(IsMainThread() ? ""
                                             : std::string(execution_thread()));
+  if (has_spmd_output_sharding()) {
+    *proto.mutable_spmd_output_sharding() = spmd_output_sharding().ToProto();
+  }
   return proto;
 }
 
@@ -842,6 +846,12 @@ HloComputation::CreateFromProto(
   computation->is_fusion_computation_ = proto.is_fusion_computation();
   if (!proto.execution_thread().empty()) {
     computation->SetExecutionThread(proto.execution_thread());
+  }
+  if (proto.has_spmd_output_sharding()) {
+    StatusOr<HloSharding> spmd_sharding =
+        HloSharding::FromProto(proto.spmd_output_sharding());
+    CHECK_OK(spmd_sharding);
+    computation->set_spmd_output_sharding(spmd_sharding.value());
   }
   return std::move(computation);
 }
@@ -1088,9 +1098,20 @@ bool HloComputation::EqualInternal(
     }
   }
 
-  if (!ignore_execution_thread) {
-    return execution_thread() == other.execution_thread();
+  if (!ignore_execution_thread &&
+      execution_thread() != other.execution_thread()) {
+    return false;
   }
+
+  if (has_spmd_output_sharding() != other.has_spmd_output_sharding()) {
+    return false;
+  }
+
+  if (has_spmd_output_sharding() &&
+      spmd_output_sharding() != other.spmd_output_sharding()) {
+    return false;
+  }
+
   return true;
 }
 
@@ -1489,6 +1510,9 @@ std::unique_ptr<HloComputation> HloComputation::CloneInContext(
 
   context.MapComputation(this, result.get());
   result->SetExecutionThread(execution_thread());
+  if (has_spmd_output_sharding()) {
+    result->set_spmd_output_sharding(spmd_output_sharding());
+  }
 
   return result;
 }

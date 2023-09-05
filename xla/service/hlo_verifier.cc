@@ -16,6 +16,7 @@ limitations under the License.
 #include "xla/service/hlo_verifier.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -39,6 +40,7 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/ir/hlo_schedule.h"
+#include "xla/hlo/ir/hlo_sharding.h"
 #include "xla/permutation_util.h"
 #include "xla/primitive_util.h"
 #include "xla/service/collective_ops_utils.h"
@@ -46,6 +48,7 @@ limitations under the License.
 #include "xla/service/shape_inference.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
+#include "xla/statusor.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
 #include "tsl/platform/errors.h"
@@ -1303,7 +1306,60 @@ Status ShapeVerifier::HandleFusion(HloInstruction* fusion) {
   return OkStatus();
 }
 
+Status ShapeVerifier::CheckShardedParameter(
+    const HloInstruction* operand, const HloInstruction* sharded_parameter) {
+  TF_RET_CHECK(sharded_parameter->has_sharding());
+  Shape unsharded_parameter_shape =
+      sharded_parameter->sharding().UnTileShape(sharded_parameter->shape());
+
+  Shape::Equal equal;
+  if (!equal(operand->shape(), unsharded_parameter_shape)) {
+    return InternalError(
+        "Operand %s shape: %s does not match sharded parameter %s expected "
+        "shape: %s, actual shape: %s  ",
+        operand->name(), operand->shape().ToString(), sharded_parameter->name(),
+        operand->shape().ToString(), unsharded_parameter_shape.ToString());
+  }
+
+  return OkStatus();
+}
+
+Status ShapeVerifier::CheckOperandAndShardedParameter(
+    const HloInstruction* instruction, int64_t operand_number,
+    const HloComputation* computation, int64_t parameter_number) {
+  const HloInstruction* operand = instruction->operand(operand_number);
+  const HloInstruction* parameter =
+      computation->parameter_instruction(parameter_number);
+  return CheckShardedParameter(operand, parameter);
+}
+
+Status ShapeVerifier::HandleShardedCall(HloInstruction* call) {
+  TF_RETURN_IF_ERROR(
+      CheckParameterCount(call, call->to_apply(), call->operand_count()));
+  for (int64_t i = 0; i < call->to_apply()->num_parameters(); ++i) {
+    TF_RETURN_IF_ERROR(
+        CheckOperandAndShardedParameter(call, i, call->to_apply(), i));
+  }
+
+  const HloComputation* to_apply_computation = call->to_apply();
+  TF_RET_CHECK(to_apply_computation->has_spmd_output_sharding());
+  Shape unsharded_output_shape =
+      to_apply_computation->spmd_output_sharding().UnTileShape(
+          to_apply_computation->root_instruction()->shape());
+
+  Shape::Equal equal;
+  equal.IgnoreTilesInLayout();
+  TF_RET_CHECK(equal(call->shape(), unsharded_output_shape))
+      << "Expected call shape: " << call->shape()
+      << " to match unsharded output shape: "
+      << unsharded_output_shape.ToString();
+  return OkStatus();
+}
+
 Status ShapeVerifier::HandleCall(HloInstruction* call) {
+  if (call->to_apply()->has_spmd_output_sharding()) {
+    return HandleShardedCall(call);
+  }
   TF_RETURN_IF_ERROR(
       CheckParameterCount(call, call->to_apply(), call->operand_count()));
   for (int64_t i = 0; i < call->to_apply()->num_parameters(); ++i) {

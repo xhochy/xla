@@ -397,6 +397,9 @@ message HloComputationProto {
 
   // The name of execution thread this computation belongs to.
   string execution_thread = 8;
+
+  // The sharding for the computation output.
+  xla.OpSharding spmd_output_sharding = 9;
 }
 
 // Serialization of an HLO schedule. An HLO schedule contains a total order of

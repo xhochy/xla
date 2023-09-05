@@ -29,6 +29,8 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
+#include "xla/hlo/ir/hlo_sharding.h"
+#include "xla/hlo/ir/tile_assignment.h"
 #include "xla/service/hlo_module_config.h"
 #include "xla/service/hlo_parser.h"
 #include "xla/service/layout_assignment.h"
@@ -2950,6 +2952,36 @@ ENTRY entry {
                           ParseAndReturnUnverifiedModule(kHlo));
   Status status = verifier().Run(module.get()).status();
 
+  TF_ASSERT_OK(status);
+}
+
+TEST_F(HloVerifierTest, ShardedCallTest) {
+  const char* const hlo_string = R"(
+  HloModule Module
+
+  callme {
+    p0 = s32[256] parameter(0), sharding={replicated}
+    p1 = s32[256, 256] parameter(1), sharding={devices=[4,1]0,1,2,3}
+    p2 = f32[64, 256] parameter(2), sharding={devices=[2,1]0,1}
+    p3 = f32[256] parameter(3), sharding={devices=[4]0,1,2,3}
+    p4 = (f32[64, 256], s32[64,256], s32[]) parameter(4), sharding={{devices=[4,1]0,1,2,3},{devices=[4,1]0,1,2,3},{replicated}}
+    ROOT r = f32[256] constant(0)
+  }
+
+  ENTRY entry {
+    p0 = s32[256] parameter(0)
+    p1 = s32[1024, 256] parameter(1)
+    p2 = f32[128, 256] parameter(2)
+    p3 = f32[1024] parameter(3)
+    p4 = (f32[256, 256], s32[256,256], s32[]) parameter(4)
+    ROOT mycall = f32[1024] call(p0, p1, p2, p3, p4), to_apply=callme
+  }
+  )";
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
+                          ParseAndReturnUnverifiedModule(hlo_string));
+  module->GetComputationWithName("callme")->set_spmd_output_sharding(
+      HloSharding::Tile(xla::TileAssignment(std::vector<int64_t>{4})));
+  Status status = verifier().Run(module.get()).status();
   TF_ASSERT_OK(status);
 }
 
