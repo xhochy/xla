@@ -24,11 +24,29 @@ namespace xla {
 // P2PSchedulePreparation is a pass to linearize point-to-point operation chain
 // to prepare for any HLO scheduler. In particular, this pass currently does the
 // following:
+// (1) For an unpipelined P2P Send-Recv chain, add control dependence to
+//     express this ordering:
+//       recv => send => recv-done => send-done
 //
-// Adds control prececessors/successors to ensure that a P2P Send-Recv sequence
-// on a non-host device will be scheduled before other operations that use the
-// Recv result and may also invoke P2P operations indirectly. Here is an example
-// to illustrate the problem we address:
+// (2) For a pipelined P2P Send-Recv chain, add control dependence to the
+//     while-body to express this ordering:
+//       send => recv
+//     No control dependence are added to a pipelined Send-Recv in the
+// computation with the while-loop as the data dependence already expresses
+// this ordering:
+//       recv => recv-done => while-loop => send => send-done.
+//
+// (3) For a pipelined P2P Send-Recv chain, if the while-body has other P2P
+// chains, we need to add control dependence to ensure that the pipelined
+// Send-done is ordered before other P2P chains while the pipelined
+// Recv-done is ordered after other P2P chains. In particular, we make the
+// pipelined Send-done the control predecessor of other Recv and the pipelined
+// Recv the control successor of other Send-done.
+//
+// (4) Adds control prececessors/successors to ensure that a P2P Send-Recv
+// sequence on a non-host device will be scheduled before other operations that
+// use the Recv result and may also invoke P2P operations indirectly. Here is an
+// example to illustrate the problem we address:
 //
 // Assume a computation with the following HLO instructions, where while-body
 // invokes collective-permute operations:
@@ -74,6 +92,13 @@ namespace xla {
 // recv-data and while-init to be scheduled before send-done. However, doing so
 // would complicate the implementation. We leave this to future improvement if
 // we will find out it can actually help performance in real practice.
+//
+// (4) Similar to case (3), if the result of the while-loop with pipelined P2P
+// chain is used by an instruction with nested P2P chains, we meed to schedule
+// send-done of the pipelined while-loop before the instruction to avoid
+// deadlock. We express this by making the send-done a control predecessor of
+// the get-tuple-element instruction that retrieve the while-loop result.
+//
 class P2PSchedulePreparation : public HloModulePass {
  public:
   absl::string_view name() const override {
