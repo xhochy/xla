@@ -1,0 +1,55 @@
+/* Copyright 2023 The TensorFlow Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+syntax = "proto3";
+
+package xla.gpu;
+
+option cc_enable_arenas = true;
+
+enum PathType {
+  option allow_alias = true;
+
+  PATH_UNSPECIFIED = 0;
+  PATH_LOC = 0;
+  PATH_NVL = 1;
+  PATH_NVB = 2;
+  PATH_PIX = 3;
+  PATH_PXB = 4;
+  PATH_PXN = 5;
+  PATH_PHB = 6;
+  PATH_SYS = 7;
+  PATH_NET = 8;
+}
+
+enum NcclTopoPattern {
+  NCCL_TOPO_PATTERN_UNSPECIFIED = 0;
+  NCCL_TOPO_PATTERN_BALANCED_TREE = 1;
+  NCCL_TOPO_PATTERN_SPLIT_TREE = 2;
+  NCCL_TOPO_PATTERN_TREE = 3;
+  NCCL_TOPO_PATTERN_RING = 4;
+  NCCL_TOPO_PATTERN_NVLS = 5;
+}
+
+message MockNcclTopoGraphConfig {
+  int32 num_channels = 1;
+  float bw_intra = 2;
+  float bw_inter = 3;
+  float latency_inter = 4;
+  PathType type_intra = 5;
+  PathType type_inter = 6;
+  bool same_channels = 7;
+  NcclTopoPattern pattern = 8;
+}

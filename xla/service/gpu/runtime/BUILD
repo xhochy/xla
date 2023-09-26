@@ -40,20 +40,6 @@ cc_library(
     ],
 )
 
-cuda_library(
-    name = "sleep_kernel_cuda",
-    srcs = if_cuda_is_configured(
-        [
-            "sleep_kernel.cu.cc",
-        ],
-    ),
-    hdrs = if_cuda_is_configured(["sleep_kernel.h"]),
-    compatible_with = [],
-    deps = [
-        "@local_config_cuda//cuda:cuda_headers",
-    ],
-)
-
 cc_library(
     name = "collectives",
     srcs = ["collectives.cc"],
@@ -67,21 +53,16 @@ cc_library(
         "//xla/service:executable",
         "//xla/service:global_device_id",
         "//xla/service/gpu:gpu_executable_run_options",
+        "//xla/service/gpu:mock_nccl_utils",
         "//xla/service/gpu:nccl_collective_thunks",
         "//xla/service/gpu:thunk",
         "//xla/stream_executor",
-        "@com_google_absl//absl/base",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-    ] + if_cuda_is_configured([
-        ":sleep_kernel_cuda",
-        "@local_config_cuda//cuda:cuda_headers",
-        "//xla/stream_executor/gpu:gpu_types_header",
-        "//xla/stream_executor/gpu:gpu_stream_header",
-    ]),
+        "@com_google_absl//absl/strings:str_format",
+    ],
 )
 
 cc_library(

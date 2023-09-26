@@ -3,7 +3,7 @@
 
 load("//xla/tests:build_defs.bzl", "xla_test")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
+load("@local_config_cuda//cuda:build_defs.bzl", "cuda_library", "if_cuda")
 load("//xla:xla.bzl", "xla_cc_test")
 load(
     "//xla/stream_executor:build_defs.bzl",
@@ -840,6 +840,82 @@ tsl_gpu_library(
         "@local_config_nccl//:nccl",
     ]) + if_rocm_is_configured([
         "@local_config_rocm//rocm:rccl",
+    ]),
+)
+
+cuda_library(
+    name = "mock_nccl_sleep_kernel_cuda",
+    srcs = if_cuda_is_configured(
+        [
+            "mock_nccl_sleep_kernel.cu.cc",
+        ],
+    ),
+    hdrs = if_cuda_is_configured(["mock_nccl_sleep_kernel.h"]),
+    compatible_with = [],
+    deps = [
+        "@local_config_cuda//cuda:cuda_headers",
+    ],
+)
+
+tf_proto_library(
+    name = "mock_nccl_config_proto",
+    srcs = ["mock_nccl_config.proto"],
+    cc_api_version = 2,
+)
+
+cc_library(
+    name = "mock_nccl_config",
+    srcs = ["mock_nccl_config.cc"],
+    hdrs = ["mock_nccl_config.h"],
+    deps = [
+        ":mock_nccl_config_proto_cc",
+        "@com_google_absl//absl/container:inlined_vector",
+    ],
+)
+
+alias(
+    name = "mock_nccl_utils",
+    actual = if_nccl(":_mock_nccl_utils", ":empty"),
+)
+
+# Do not depend on this target, but rather depend on :mock_nccl_utils.
+cc_library(
+    name = "_mock_nccl_utils",
+    srcs = if_cuda_is_configured(["mock_nccl_utils.cc"]),
+    hdrs = if_cuda_is_configured(["mock_nccl_utils.h"]),
+    # Override tsl_gpu_library()'s internal default value of ["//buildenv/target:gce"].
+    compatible_with = [],
+    defines = if_cuda_is_configured(["XLA_ENABLE_XCCL"]),
+    tags = ["manual"],  # Only builds with if_nccl().
+    deps = if_cuda_is_configured([
+        ":gpu_executable_run_options",
+        ":mock_nccl_config",
+        ":mock_nccl_config_proto_cc",
+        ":mock_nccl_sleep_kernel_cuda",
+        ":nccl_collective_thunks",
+        ":nccl_utils",
+        ":thunk",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+        "@local_config_cuda//cuda:cuda_headers",
+        "@local_config_nccl//:nccl",
+        "//xla:executable_run_options",
+        "//xla:shape_util",
+        "//xla:status",
+        "//xla:status_macros",
+        "//xla:statusor",
+        "//xla/service:collective_ops_utils",
+        "//xla/service:global_device_id",
+        "//xla/stream_executor:stream_executor_headers",
+        "//xla/stream_executor/gpu:gpu_activation",
+        "//xla/stream_executor/gpu:gpu_stream_header",
+        "//xla/stream_executor/gpu:gpu_types_header",
+        "@tsl//tsl/platform:errors",
+        "@tsl//tsl/platform:statusor",
     ]),
 )
 
