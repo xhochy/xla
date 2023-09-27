@@ -373,7 +373,7 @@ StatusOr<std::unique_ptr<PjRtStreamExecutorBuffer>> AllocateDestinationBuffer(
     return InvalidArgument("Can't make a buffer from an empty tuple");
   }
 
-  auto* se_client = tensorflow::down_cast<PjRtStreamExecutorClient*>(client);
+  auto* se_client = tsl::down_cast<PjRtStreamExecutorClient*>(client);
   TransferManager* transfer_manager =
       se_client->client()->backend().transfer_manager();
   TF_ASSIGN_OR_RETURN(ScopedShapedBuffer dst_buffer,
@@ -705,9 +705,9 @@ PjRtStreamExecutorClient::BufferFromHostBuffer(
   Shape device_shape = ShapeUtil::MakeShape(type, dims);
   VLOG(1) << "PjRtStreamExecutorClient::BufferFromHostBuffer: shape: "
           << device_shape.ToString() << " device: " << device->DebugString();
-  TF_ASSIGN_OR_RETURN(LocalDeviceState * local_device,
-                      tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
-                          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(
+      LocalDeviceState * local_device,
+      tsl::down_cast<PjRtStreamExecutorDevice*>(device)->GetLocalDeviceState());
 
   absl::InlinedVector<int64_t, 4> tmp_strides;
   if (!byte_strides) {
@@ -940,9 +940,9 @@ PjRtStreamExecutorClient::CreateUninitializedBuffer(
       "PjRtStreamExecutorClient::CreateUninitializedBuffer");
   VLOG(1) << "PjRtStreamExecutorClient::CreateUninitializedBuffer: shape: "
           << shape.ToString() << " device: " << device->DebugString();
-  TF_ASSIGN_OR_RETURN(LocalDeviceState * local_device,
-                      tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
-                          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(
+      LocalDeviceState * local_device,
+      tsl::down_cast<PjRtStreamExecutorDevice*>(device)->GetLocalDeviceState());
 
   TransferManager* transfer_manager = client()->backend().transfer_manager();
   TF_ASSIGN_OR_RETURN(Shape compact_shape,
@@ -977,9 +977,9 @@ PjRtStreamExecutorClient::BufferFromHostLiteral(const LiteralSlice& literal,
       "PjRtStreamExecutorClient::BufferFromHostLiteral");
   VLOG(1) << "PjRtStreamExecutorClient::BufferFromHostLiteral: shape: "
           << literal.shape().ToString() << " device: " << device->DebugString();
-  TF_ASSIGN_OR_RETURN(LocalDeviceState * local_device,
-                      tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
-                          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(
+      LocalDeviceState * local_device,
+      tsl::down_cast<PjRtStreamExecutorDevice*>(device)->GetLocalDeviceState());
 
   TransferManager* transfer_manager = client()->backend().transfer_manager();
   TF_ASSIGN_OR_RETURN(
@@ -1041,9 +1041,9 @@ PjRtStreamExecutorClient::MakeCrossHostReceiveBuffers(
         "shapes parameter empty in MakeCrossHostReceiveBuffers");
   }
 
-  TF_ASSIGN_OR_RETURN(LocalDeviceState * local_device,
-                      tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
-                          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(
+      LocalDeviceState * local_device,
+      tsl::down_cast<PjRtStreamExecutorDevice*>(device)->GetLocalDeviceState());
   std::shared_ptr<BufferSequencingEvent> definition_event =
       std::make_shared<BufferSequencingEvent>(this->thread_pool());
   std::vector<std::unique_ptr<PjRtBuffer>> buffers;
@@ -1083,9 +1083,9 @@ PjRtStreamExecutorClient::MakeCrossHostReceiveBuffersForGather(
         gather_details.size(), shapes.size());
   }
 
-  TF_ASSIGN_OR_RETURN(LocalDeviceState * local_device,
-                      tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
-                          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(
+      LocalDeviceState * local_device,
+      tsl::down_cast<PjRtStreamExecutorDevice*>(device)->GetLocalDeviceState());
   std::shared_ptr<BufferSequencingEvent> definition_event =
       std::make_shared<BufferSequencingEvent>(this->thread_pool());
   std::vector<std::unique_ptr<PjRtBuffer>> buffers;
@@ -1113,9 +1113,9 @@ PjRtStreamExecutorClient::CreateViewOfDeviceBuffer(
     std::optional<std::intptr_t> stream) {
   se::DeviceMemoryBase buffer(device_ptr, ShapeUtil::ByteSizeOf(shape));
 
-  TF_ASSIGN_OR_RETURN(LocalDeviceState * local_device,
-                      tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
-                          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(
+      LocalDeviceState * local_device,
+      tsl::down_cast<PjRtStreamExecutorDevice*>(device)->GetLocalDeviceState());
 
   absl::InlinedVector<std::shared_ptr<BufferSequencingEvent>, 2>
       definition_events;
@@ -1201,9 +1201,9 @@ absl::Span<PjRtMemorySpace* const> PjRtStreamExecutorClient::memory_spaces()
 PjRtStreamExecutorBuffer::PjRtStreamExecutorBuffer(
     Shape on_device_shape, std::shared_ptr<TrackedDeviceBuffer> device_buffer,
     PjRtClient* client, PjRtDevice* device)
-    : client_(tensorflow::down_cast<PjRtStreamExecutorClient*>(client)),
+    : client_(tsl::down_cast<PjRtStreamExecutorClient*>(client)),
       on_device_shape_(std::move(on_device_shape)),
-      device_(tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)),
+      device_(tsl::down_cast<PjRtStreamExecutorDevice*>(device)),
       device_buffer_(std::move(device_buffer)) {
   for (int i = 0; i < ScopedHold::Type::kMaxValue; ++i) {
     holds_[i] = 0;
@@ -1672,10 +1672,9 @@ StatusOr<std::unique_ptr<PjRtBuffer>> PjRtStreamExecutorBuffer::CopyToDevice(
         [literal{std::move(literal)}]() { /* frees literal */ }, dst_device);
   }
 
-  TF_ASSIGN_OR_RETURN(
-      LocalDeviceState * dst_local_device,
-      tensorflow::down_cast<PjRtStreamExecutorDevice*>(dst_device)
-          ->GetLocalDeviceState());
+  TF_ASSIGN_OR_RETURN(LocalDeviceState * dst_local_device,
+                      tsl::down_cast<PjRtStreamExecutorDevice*>(dst_device)
+                          ->GetLocalDeviceState());
   LocalDeviceState* transfer_local_device =
       client_->EnqueueD2DTransfersOnSrcStream() ? device_->local_device_state()
                                                 : dst_local_device;
@@ -2367,7 +2366,7 @@ StatusOr<ScopedShapedBuffer> PjRtStreamExecutorExecutable::EnqueueExecution(
     std::vector<PjRtStreamExecutorBuffer::ScopedHold>* device_buffers,
     std::shared_ptr<DeviceAssignment> device_assignment,
     std::vector<std::function<void()>>& compute_callbacks) const {
-  int device_ordinal = tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
+  int device_ordinal = tsl::down_cast<PjRtStreamExecutorDevice*>(device)
                            ->local_device_state()
                            ->device_ordinal();
   LocalDeviceState* device_state = &(client_->device_state(device_ordinal));
@@ -2386,7 +2385,7 @@ StatusOr<ScopedShapedBuffer> PjRtStreamExecutorExecutable::EnqueueExecution(
   absl::flat_hash_set<PjRtStreamExecutorBuffer*> donated_buffers;
   for (int i = 0; i < argument_handles.size(); ++i) {
     auto* handle =
-        tensorflow::down_cast<PjRtStreamExecutorBuffer*>(argument_handles[i]);
+        tsl::down_cast<PjRtStreamExecutorBuffer*>(argument_handles[i]);
     if (handle->device() != device) {
       return InvalidArgument(
           "Buffer passed to Execute() as argument %d to replica %d is on "
@@ -2624,7 +2623,7 @@ PjRtStreamExecutorExecutable::ExecuteHelper(
   }
 
   CHECK_EQ(device->process_index(), client_->process_index());
-  int device_ordinal = tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
+  int device_ordinal = tsl::down_cast<PjRtStreamExecutorDevice*>(device)
                            ->local_device_state()
                            ->device_ordinal();
   tsl::profiler::TraceMe traceme("PjRtStreamExecutorExecutable::ExecuteHelper");
@@ -2753,7 +2752,7 @@ PjRtStreamExecutorExecutable::Execute(
       const int partition = addressable_device_logical_ids_[i].partition;
       PjRtDevice* device = addressable_devices_[i];
       const LocalDeviceState& device_state =
-          *tensorflow::down_cast<PjRtStreamExecutorDevice*>(device)
+          *tsl::down_cast<PjRtStreamExecutorDevice*>(device)
                ->local_device_state();
       device_state.execute_thread()->Schedule([&, replica, partition, i] {
         results[i] =
@@ -3041,7 +3040,7 @@ PjRtStreamExecutorClient::Compile(mlir::ModuleOp module,
 StatusOr<std::string> PjRtStreamExecutorClient::SerializeExecutable(
     const PjRtLoadedExecutable& executable) const {
   const PjRtStreamExecutorExecutable* se_executable =
-      tensorflow::down_cast<const PjRtStreamExecutorExecutable*>(&executable);
+      tsl::down_cast<const PjRtStreamExecutorExecutable*>(&executable);
 
   absl::Span<const std::shared_ptr<LocalExecutable>> local_executables =
       se_executable->executables();
