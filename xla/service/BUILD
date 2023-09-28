@@ -1225,6 +1225,7 @@ cc_library(
     srcs = ["p2p_schedule_preparation.cc"],
     hdrs = ["p2p_schedule_preparation.h"],
     deps = [
+        ":collective_ops_utils",
         ":hlo_pass",
         "//xla:status",
         "//xla:statusor",
@@ -1236,6 +1237,7 @@ cc_library(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@tsl//tsl/platform:errors",
+        "@tsl//tsl/platform:statusor",
     ],
 )
 
