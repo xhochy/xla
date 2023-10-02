@@ -22,11 +22,13 @@ limitations under the License.
 #include <vector>
 
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "xla/hlo/ir/dfs_hlo_visitor_with_default.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
+#include "xla/hlo/ir/hlo_sharding.h"
 #include "xla/hlo/utils/hlo_matchers.h"
 #include "xla/literal.h"
 #include "xla/service/pattern_matcher.h"
@@ -901,6 +903,65 @@ TEST_F(HloComputationTest, CloneWrappedAsyncInstructionDiffWrappedFunc) {
       done->CloneWithNewOperands(done->shape(), {cloned_start.get()});
   EXPECT_NE(cloned_start.get()->called_computations()[0],
             cloned_done.get()->called_computations()[0]);
+}
+
+TEST_F(HloComputationTest, GetAndSetOutputSharding) {
+  auto module = CreateNewVerifiedModule();
+  auto computation = module->AddEntryComputation(CreateNegateComputation());
+  EXPECT_FALSE(computation->has_spmd_output_sharding());
+  computation->set_spmd_output_sharding(HloSharding::Replicate());
+  EXPECT_TRUE(computation->has_spmd_output_sharding());
+  EXPECT_TRUE(computation->spmd_output_sharding().IsReplicated());
+}
+
+TEST_F(HloComputationTest, ComputationEqualShardingMustMatch) {
+  auto module1 = CreateNewVerifiedModule();
+  HloComputation* computation1 =
+      module1->AddEntryComputation(CreateNegateComputation());
+  computation1->set_spmd_output_sharding(HloSharding::Replicate());
+
+  auto module2 = CreateNewVerifiedModule();
+  HloComputation* computation2 =
+      module2->AddEntryComputation(CreateNegateComputation());
+
+  EXPECT_FALSE(computation1->Equal(*computation2, false));
+
+  auto module3 = CreateNewVerifiedModule();
+  HloComputation* computation3 =
+      module3->AddEntryComputation(CreateNegateComputation());
+  computation3->set_spmd_output_sharding(HloSharding::Replicate());
+
+  EXPECT_TRUE(computation1->Equal(*computation3, false));
+  EXPECT_TRUE(computation3->Equal(*computation1, false));
+
+  auto module4 = CreateNewVerifiedModule();
+  HloComputation* computation4 =
+      module4->AddEntryComputation(CreateNegateComputation());
+  computation4->set_spmd_output_sharding(HloSharding::Tile({{1, 0}}));
+
+  EXPECT_FALSE(computation4->Equal(*computation1, false));
+  EXPECT_FALSE(computation1->Equal(*computation4, false));
+}
+
+TEST_F(HloComputationTest, CloneOutputSharding) {
+  auto module1 = CreateNewVerifiedModule();
+  HloComputation* computation1 =
+      module1->AddEntryComputation(CreateNegateComputation());
+  computation1->set_spmd_output_sharding(HloSharding::Replicate());
+  auto computation2 = computation1->Clone();
+
+  EXPECT_TRUE(computation1->Equal(*computation2, false));
+}
+
+TEST_F(HloComputationTest, ToProtoFromProtoOutputSharding) {
+  auto module1 = CreateNewVerifiedModule();
+  HloComputation* computation1 =
+      module1->AddEntryComputation(CreateNegateComputation());
+  computation1->set_spmd_output_sharding(HloSharding::Replicate());
+  TF_ASSERT_OK_AND_ASSIGN(auto computation2, HloComputation::CreateFromProto(
+                                                 computation1->ToProto(), {}));
+  EXPECT_TRUE(computation2->has_spmd_output_sharding());
+  EXPECT_TRUE(computation2->spmd_output_sharding().IsReplicated());
 }
 
 }  // namespace

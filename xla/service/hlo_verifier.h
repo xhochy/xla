@@ -250,6 +250,14 @@ class ShapeVerifier : public DfsHloVisitor {
                                     const HloComputation* computation,
                                     int expected);
 
+  // Verify call HLO to sharded computation.
+  Status HandleShardedCall(HloInstruction* call);
+  Status CheckOperandAndShardedParameter(const HloInstruction* instruction,
+                                         int64_t operand_number,
+                                         const HloComputation* computation,
+                                         int64_t parameter_number);
+  Status CheckShardedParameter(const HloInstruction* operand,
+                               const HloInstruction* sharded_parameter);
   // Check a unary (binary, etc) instruction's shape against the inferred shape.
   Status CheckUnaryShape(const HloInstruction* instruction);
   Status CheckBinaryShape(const HloInstruction* instruction);
