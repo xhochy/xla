@@ -118,6 +118,7 @@ struct PJRT_Executable {
 
   const xla::PjRtExecutable* get() const { return executable.get(); }
   xla::PjRtExecutable* get() { return executable.get(); }
+  xla::StatusOr<std::string> fingerprint;
 };
 
 struct PJRT_LoadedExecutable {
@@ -262,6 +263,7 @@ PJRT_Error* PJRT_LoadedExecutable_AddressableDevices(
 PJRT_Error* PJRT_Executable_NumOutputs(PJRT_Executable_NumOutputs_Args* args);
 PJRT_Error* PJRT_Executable_SizeOfGeneratedCodeInBytes(
     PJRT_Executable_SizeOfGeneratedCodeInBytes_Args* args);
+PJRT_Error* PJRT_Executable_Fingerprint(PJRT_Executable_Fingerprint_Args* args);
 PJRT_Error* PJRT_Executable_GetCostAnalysis(
     PJRT_Executable_GetCostAnalysis_Args* args);
 PJRT_Error* PJRT_Executable_OutputElementTypes(
@@ -286,6 +288,7 @@ PJRT_Error* PJRT_Executable_DeserializeAndLoad(
     PJRT_Executable_DeserializeAndLoad_Args* args);
 PJRT_Error* PJRT_LoadedExecutable_GetExecutable(
     PJRT_LoadedExecutable_GetExecutable_Args* args);
+// TODO(303281602) deprecate after the forward compatibility window
 PJRT_Error* PJRT_LoadedExecutable_Fingerprint(
     PJRT_LoadedExecutable_Fingerprint_Args* args);
 
@@ -563,6 +566,7 @@ constexpr PJRT_Api CreatePjrtApi(
       pjrt::PJRT_Buffer_CopyToMemory,
       /*PJRT_Client_CreateViewOfDeviceBuffer=*/
       pjrt::PJRT_Client_CreateViewOfDeviceBuffer,
+      /*PJRT_Executable_Fingerprint=*/pjrt::PJRT_Executable_Fingerprint,
   };
 }
 

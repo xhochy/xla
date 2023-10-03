@@ -1,5 +1,9 @@
 # PJRT C API changelog
 
+## 0.35 (Oct 20, 2023)
+
+* Added PJRT_Executable_Fingerprint method and deprecated PJRT_LoadedExecutable_Fingerprint.
+
 ## 0.34 (Oct 9, 2023)
 
 * Added PJRT_Structure_Type::PJRT_Structure_Type_Profiler.
