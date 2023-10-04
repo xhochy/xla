@@ -69,11 +69,14 @@ limitations under the License.
 
 #include "xla/pjrt/transpose.h"
 
+#include <xmmintrin.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <stack>
@@ -134,9 +137,71 @@ struct TransposePlan::Node {
 };
 
 void ConvertF64ToEf57(const double* input, float* output, int n) {
-  // TODO(phawkins): vectorize this transformation.
+#ifdef __AVX__
+  
+  auto avx_convert = [](__m256d x) {
+__m128 x_hi_f32 = _mm256_cvtpd_ps(x);
+    __m256d x_hi_f64 = _mm256_cvtps_pd(x_hi_f32);
+    __m256d x_lo_f64 = _mm256_sub_pd(x, x_hi_f64);
+    __m128 x_lo_f32 = _mm256_cvtpd_ps(x_lo_f64);
+
+    __m128 abs_x_hi_f32 =
+        _mm_and_ps(x_hi_f32, _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff)));
+    __m128 x_is_finite =
+        _mm_cmplt_ps(abs_x_hi_f32, _mm_set1_ps(__builtin_inff()));
+    x_lo_f32 = _mm_and_ps(x_lo_f32, x_is_finite);
+    return std::make_pair(x_hi_f32, x_lo_f32);
+  };
+
+  __m128i n_m128 = _mm_set1_epi32(n);
+  __m128i low_iota = _mm_setr_epi32(0, 0, 1, 1);
+  __m128i high_iota = _mm_setr_epi32(2, 2, 3, 3);
+  while (n > 0) {
+    int to_process = n < sizeof(__m256d) / sizeof(double) ? n : 4;
+    __m128i low_msk = _mm_cmpgt_epi32(n_m128, low_iota);
+    __m128i high_msk = _mm_cmpgt_epi32(n_m128, high_iota);
+
+    __m256i load_msk = _mm256_setr_m128i(low_msk, high_msk);
+    __m256d x = _mm256_maskload_pd(input, load_msk);
+    
+    auto [x_hi_f32, x_lo_f32] = avx_convert(x);
+
+    _mm_maskstore_ps(output + 0, low_msk, _mm_unpacklo_ps(x_lo_f32, x_hi_f32));
+    _mm_maskstore_ps(output + to_process, high_msk,
+                     _mm_unpackhi_ps(x_lo_f32, x_hi_f32));
+
+    n_m128 = _mm_sub_epi32(n_m128, _mm_set1_epi32(4));
+    n -= 4;
+    input += 4;
+    output += 4 * 2;
+  }
+  return;
+#endif
+#ifdef XLA_HAS_SSE2
+  while (n >= 2) {
+    __m128d x = _mm_loadu_pd(input);
+    __m128 x_hi_f32 = _mm_cvtpd_ps(x);
+    __m128d x_hi_f64 = _mm_cvtps_pd(x_hi_f32);
+    __m128d x_lo_f64 = _mm_sub_pd(x, x_hi_f64);
+    __m128 x_lo_f32 = _mm_cvtpd_ps(x_lo_f64);
+
+    __m128 abs_x_hi_f32 =
+        _mm_and_ps(x_hi_f32, _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff)));
+    __m128 x_is_finite = _mm_cmplt_ps(
+        abs_x_hi_f32, _mm_set1_ps(std::numeric_limits<float>::infinity()));
+    x_lo_f32 = _mm_and_ps(x_lo_f32, x_is_finite);
+
+    __m128 to_store = _mm_unpacklo_ps(x_lo_f32, x_hi_f32);
+    _mm_storeu_ps(output, to_store);
+
+    n -= 2;
+    input += 2;
+    output += 4;
+  }
+#endif
   for (int i = 0; i < n; ++i) {
-    std::tie(output[0], output[1]) = SplitF64ToF32(*input);
+    std::tie(output[0], output[1]) =
+        SplitF64ToF32</*kWarnOnOverflow=*/false>(*input);
     ++input;
     output += 2;
   }
@@ -156,10 +221,17 @@ void MacroKernel(const char* __restrict a, int64_t lda, int outer_bs_a,
   if constexpr (transformation == TransposePlan::Transformation::kF64ToEf57) {
     DCHECK_EQ(outer_bs_a * inner_bs % 2, 0);
     float* p = reinterpret_cast<float*>(scratch);
-    for (int i = 0; i < outer_bs_b * inner_bs; ++i) {
-      ConvertF64ToEf57(reinterpret_cast<const double*>(a + lda * i),
-                       p + outer_bs_a * inner_bs * i,
-                       outer_bs_a * inner_bs / 2);
+    if (ABSL_PREDICT_TRUE(lda == sizeof(double) &&
+                          outer_bs_a * inner_bs == 2)) {
+      ConvertF64ToEf57(reinterpret_cast<const double*>(a), p,
+                       outer_bs_b * inner_bs);
+    } else {
+      LOG(FATAL) << "unpossible";
+      for (int i = 0; i < outer_bs_b * inner_bs; ++i) {
+        ConvertF64ToEf57(reinterpret_cast<const double*>(a + lda * i),
+                         p + outer_bs_a * inner_bs * i,
+                         outer_bs_a * inner_bs / 2);
+      }
     }
     a = reinterpret_cast<const char*>(scratch);
     lda = outer_bs_a * inner_bs * sizeof(float);
