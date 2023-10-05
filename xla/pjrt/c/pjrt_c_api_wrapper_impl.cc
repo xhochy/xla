@@ -2158,8 +2158,10 @@ PJRT_Executable::PJRT_Executable(
 
 PJRT_LoadedExecutable::PJRT_LoadedExecutable(
     std::shared_ptr<xla::PjRtLoadedExecutable> executable, PJRT_Client* client)
-    : executable(std::move(executable)),
-      client(client),
-      fingerprint(client->client->ExecutableFingerprint(*this->executable)) {
+    : executable(std::move(executable)), client(client) {
+  xla::StatusOr<std::string> status = this->executable->FingerprintExecutable();
+  if (status.ok()) {
+    fingerprint = status.value();
+  }
   pjrt::PopulatePjrtExecutableAddressableDevices(this);
 }
