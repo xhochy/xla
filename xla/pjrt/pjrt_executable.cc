@@ -86,6 +86,10 @@ StatusOr<CompileOptionsProto> CompileOptions::ToProto() const {
     std::visit([&](const auto& arg) { SetOptionOverride(tmp, arg); },
                env_option_override.second);
   }
+
+  if (target_config.has_value()) {
+    *output.mutable_target_config() = target_config->ToProto();
+  }
   return output;
 }
 
@@ -124,6 +128,10 @@ StatusOr<CompileOptions> CompileOptions::FromProto(
   output.profile_version = proto.profile_version();
   TF_ASSIGN_OR_RETURN(output.env_option_overrides,
                       LoadEnvOptionOverrides(proto.env_option_overrides()));
+
+  if (proto.has_target_config()) {
+    output.target_config = xla::Compiler::TargetConfig(proto.target_config());
+  }
   return output;
 }
 

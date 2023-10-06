@@ -2533,19 +2533,6 @@ cc_library(
 )
 
 cc_library(
-    name = "gpu_target_config",
-    srcs = ["gpu_target_config.cc"],
-    hdrs = ["gpu_target_config.h"],
-    compatible_with = get_compatible_with_portable(),
-    deps = [
-        "//xla/stream_executor",
-        "//xla/stream_executor:device_description",
-        "//xla/stream_executor:device_description_proto_cc",
-        "//xla/stream_executor:dnn",
-    ],
-)
-
-cc_library(
     name = "gpu_compiler",
     srcs = if_gpu_is_configured([
         "gpu_compiler.cc",
@@ -2585,7 +2572,6 @@ cc_library(
         ":gpu_all_gather_optimizer",
         ":gpu_sanitize_constant_names",
         ":gpu_scatter_expander",
-        ":gpu_target_config",
         ":hlo_fusion_stats",
         ":horizontal_input_fusion",
         ":horizontal_loop_fusion",
