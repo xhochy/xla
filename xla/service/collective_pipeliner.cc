@@ -1121,6 +1121,7 @@ Status TransformLoopForward(const WhileLoopAnalysis& loop_analysis,
                             int64_t level_to_operate_on, bool pipeline_use_tree,
                             bool process_different_sized_ops,
                             HloPredicate should_process,
+                            HloPredicate reuse_output_buffer,
                             int64_t& next_channel_id) {
   // Defining some maps/sets to keep track of instructions duplicated.
   InstructionMap while_body_to_peeled;
@@ -1139,7 +1140,8 @@ Status TransformLoopForward(const WhileLoopAnalysis& loop_analysis,
     const Shape& output_shape = to_move.formatting_ops.empty()
                                     ? to_move.collective_to_move->shape()
                                     : to_move.formatting_ops.back()->shape();
-    if (output_shape != to_move.collective_to_move->operand(0)->shape()) {
+    if (!reuse_output_buffer(to_move.collective_to_move) ||
+        output_shape != to_move.collective_to_move->operand(0)->shape()) {
       moves_requiring_special_output.push_back(count);
       to_skip_set.insert(to_move.dynamic_update_slice);
     }
@@ -2265,7 +2267,8 @@ StatusOr<bool> CollectivePipeliner::Run(
       TF_RETURN_IF_ERROR(TransformLoopForward(
           loop_analysis, !config_.last_run, config_.level_to_operate_on,
           config_.pipeline_use_tree, config_.process_different_sized_ops,
-          config_.should_process, next_channel_id));
+          config_.should_process, config_.reuse_pipelined_op_buffer,
+          next_channel_id));
     } else if (config_.pipelining_direction ==
                PipeliningDirection::kForwardSink) {
       TF_RETURN_IF_ERROR(TransformLoopForwardSink(
