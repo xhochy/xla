@@ -57,11 +57,6 @@ limitations under the License.
 #include "tsl/lib/strings/proto_serialization.h"
 #include "tsl/platform/errors.h"
 #include "tsl/profiler/lib/connected_traceme.h"
-#include "tfrt/host_context/async_dispatch.h"  // from @tf_runtime
-#include "tfrt/host_context/concurrent_work_queue.h"  // from @tf_runtime
-#include "tfrt/host_context/diagnostic.h"  // from @tf_runtime
-#include "tfrt/host_context/host_allocator.h"  // from @tf_runtime
-#include "tfrt/host_context/host_context.h"  // from @tf_runtime
 
 #if defined(GOOGLE_CUDA) || defined(TENSORFLOW_USE_ROCM)
 #include "xla/pjrt/compile_options.pb.h"
@@ -86,7 +81,7 @@ limitations under the License.
 #include "xla/statusor.h"
 #include "xla/stream_executor/device_host_allocator.h"
 #include "xla/stream_executor/device_mem_allocator.h"
-#include "xla/stream_executor/tf_allocator_adapter.h"
+#include "xla/stream_executor/integrations/tf_allocator_adapter.h"
 #include "xla/util.h"
 #include "tsl/framework/device_id.h"
 #include "tsl/util/env_var.h"
@@ -797,20 +792,15 @@ static StatusOr<std::vector<LocalTopologyProto>> GetAllLocalTopologies(
     int num_nodes, const PjRtClient::KeyValueGetCallback& kv_get,
     absl::Duration timeout) {
   std::vector<StatusOr<std::string>> local_topology_strs(num_nodes);
-  auto host_context = std::make_unique<tfrt::HostContext>(
-      [](const tfrt::DecodedDiagnostic& diag) {
-        LOG(ERROR) << "Encountered runtime error: " << diag.message() << "\n";
-      },
-      tfrt::CreateMallocAllocator(),
-      tfrt::CreateMultiThreadedWorkQueue(
-          /*num_threads=*/DefaultThreadPoolSize(),
-          /*num_blocking_threads=*/4));
+
+  // TODO(ezhulenev): Should a thread pool become a function argument?
+  tsl::thread::ThreadPool thread_pool(
+      tsl::Env::Default(), "GetAllLocalTopologies", DefaultThreadPoolSize());
 
   absl::BlockingCounter blocking_counter(num_nodes);
   absl::Mutex mu;
   for (int i = 0; i < num_nodes; i++) {
-    tfrt::EnqueueWork(
-        host_context.get(),
+    thread_pool.Schedule(
         [&mu, &local_topology_strs, &blocking_counter, &kv_get, i, &timeout] {
           StatusOr<std::string> local_topology_str =
               kv_get(GetLocalTopologyKey(i), timeout);
