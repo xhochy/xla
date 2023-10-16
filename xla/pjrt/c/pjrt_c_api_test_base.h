@@ -39,6 +39,20 @@ class PjrtCApiTestBase : public ::testing::Test {
   PJRT_Client* client_;
   void destroy_client(PJRT_Client* client);
 
+  int GetDeviceId(PJRT_DeviceDescription* device_desc) const;
+
+  int GetDeviceId(PJRT_Device* device) const;
+
+  bool IsValidDeviceId(PJRT_Device* device) const;
+
+  int GetLocalHardwareId(PJRT_Device* device) const;
+
+  absl::Span<PJRT_Device*> GetClientDevices() const;
+
+  int GetNumDevices() const;
+
+  std::string BuildSingleDeviceCompileOptionStr();
+
   absl::Span<PJRT_Device*> GetClientAddressableDevices() const;
 
   PJRT_Client_BufferFromHostBuffer_Args CreateBufferFromHostBufferArgs(
